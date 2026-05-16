@@ -1,0 +1,17 @@
+function showSuccessToast(message) {
+  const existingToast = document.getElementById('successMessage');
+  if (existingToast) {
+    existingToast.innerHTML = message;
+    existingToast.classList.add('show');
+  } else {
+    const newToast = document.createElement('div');
+    newToast.id = 'successMessage';
+    newToast.className = 'success-toast show';
+    newToast.innerHTML = message;
+    document.body.appendChild(newToast);
+  }
+  setTimeout(function() {
+    const successToast = document.getElementById('successMessage');
+    if (successToast) successToast.classList.remove('show');
+  }, 6000);
+}
