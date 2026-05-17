@@ -10,16 +10,9 @@
     let paisSelecionadoBotao = '';
     let categoriaSelecionadaBotao = '';
     let modoSelecionado = 'nacional';
-    let tipoSelecionado = '';
 
     function formatNumber(value) {
       return new Intl.NumberFormat('pt-BR').format(value || 0);
-    }
-
-    function parseNumber(value) {
-      if (!value) return 0;
-      const str = String(value).trim();
-      return parseFloat(str.replace(/\./g, '').replace(/,/g, '.')) || 0;
     }
 
     function formatDecimal(value) {
@@ -64,216 +57,19 @@
       return '🌍';
     }
 
-    function getCountryCodeByDestino(destino) {
-      const nome = removeAccents(destino);
-      if (nome.includes('paraguai')) return 'PY';
-      if (nome.includes('uruguai')) return 'UY';
-      if (nome.includes('chile')) return 'CL';
-      if (nome.includes('panama')) return 'PA';
-      if (nome.includes('mexico')) return 'MX';
-      if (nome.includes('portugal')) return 'PT';
-      return '??';
-    }
-
-    function getCanonicalCountryName(destino) {
-      const nome = removeAccents(destino);
-      if (nome.includes('paraguai')) return 'Paraguai';
-      if (nome.includes('uruguai')) return 'Uruguai';
-      if (nome.includes('chile')) return 'Chile';
-      if (nome.includes('panama')) return 'Panamá';
-      if (nome.includes('mexico')) return 'México';
-      if (nome.includes('portugal')) return 'Portugal';
-      return destino;
-    }
-
     function isValidDestino(destino) {
       if (!destino) return false;
       const destinoNorm = destino.trim().toLowerCase();
       return destinoNorm !== '' && destinoNorm !== 'sem destino';
     }
 
-    function isExportCountryDestino(destino) {
-      if (!destino) return false;
-      const paises = ['paraguai', 'uruguai', 'chile', 'panama', 'mexico', 'portugal'];
-      const destinoNorm = removeAccents(destino).toLowerCase();
-      return paises.some(function(pais) {
-        return destinoNorm === pais || destinoNorm.startsWith(pais + ' ') || destinoNorm.includes(' ' + pais + ' ');
-      });
-    }
-
-    function processSheetData(values) {
-      if (!values || values.length < 2) return { filtros: { categorias: [], destinos: [], empresas: [], mercadorias: [] }, registros: [], metadados: { tamanhos: [] }, metasM3: {} };
-
-      const normalizeKey = function(text) {
-        return removeAccents(String(text || ''))
-          .replace(/\s+/g, '')
-          .replace(/[^a-z0-9]/g, '')
-          .toLowerCase();
-      };
-
-      const headerMap = {
-        mercadoria: 'mercadoria',
-        empresa: 'empresa',
-        tamanho: 'tamanho',
-        qtd: 'qtd',
-        m3: 'm3',
-        m: 'm3',
-        volumen: 'volumes',
-        volumes: 'volumes',
-        destino: 'destino',
-        kg: 'kg',
-        categoria: 'categoria',
-        palet: 'palet',
-        palet: 'palet',
-        destinocompleto: 'destinoCompleto',
-        pais: 'pais',
-        modo: 'modo',
-        tipo: 'tipo'
-      };
-
-      const headers = values[0];
-      console.log('Headers originais:', headers);
-      
-      // Mapa adicional para headers que contêm M³ ou outros caracteres especiais
-      const headerIndexMap = {};
-      headers.forEach((header, index) => {
-        const key = normalizeKey(header);
-        const mapped = headerMap[key] || key;
-        
-        // Verifica se o header original contém M³
-        if ((header || '').includes('M³') || (header || '').includes('M3')) {
-          headerIndexMap[index] = 'm3';
-        } else if (mapped === 'volumes' || mapped === 'volumen') {
-          headerIndexMap[index] = 'volumes';
-        } else if (mapped) {
-          headerIndexMap[index] = mapped;
-        }
-      });
-      
-      console.log('Mapa de headers:', headerIndexMap);
-      console.log('Headers com índices:', headers.map((h, i) => `[${i}] ${h}`).join(', '));
-      
-      const rows = values.slice(1);
-
-      const registros = rows.map((row, rowIndex) => {
-        const obj = {};
-
-        headers.forEach((header, index) => {
-          const mapped = headerIndexMap[index];
-          const key = normalizeKey(header);
-          const fallbackMapped = headerMap[key] || key;
-          
-          const fieldName = mapped || fallbackMapped;
-          obj[fieldName] = row[index] || '';
-        });
-
-        if (rowIndex === 0) {
-          console.log('Primeiro registro raw:', obj);
-          console.log('Valor de m3 raw:', obj.m3);
-        }
-
-        const destino = (obj.destino || '').trim();
-        const destinoLower = removeAccents(destino).toLowerCase();
-
-        let tipo = '';
-        let pais = 'Brasil';
-        let modo = 'nacional';
-
-        if (destinoLower.includes('romance')) {
-          tipo = 'romance';
-          modo = 'internacional';
-          
-          const paisMatch = destino.match(/^(.+?)\s+Romance$/i);
-          if (paisMatch) {
-            pais = getCanonicalCountryName(paisMatch[1].trim());
-          }
-        } else if (destinoLower.includes('favorita')) {
-          tipo = 'favorita';
-          modo = 'internacional';
-          
-          const paisMatch = destino.match(/^(.+?)\s+Favorita$/i);
-          if (paisMatch) {
-            pais = getCanonicalCountryName(paisMatch[1].trim());
-          }
-        } else if (isExportCountryDestino(destino)) {
-          tipo = '';
-          modo = 'internacional';
-          pais = getCanonicalCountryName(destino);
-        } else {
-          tipo = 'nacional';
-          modo = 'nacional';
-          pais = 'Brasil';
-        }
-
-        obj.tipo = tipo;
-        obj.pais = pais;
-        obj.modo = modo;
-        obj.destinoCompleto = destino;
-
-        obj.qtd = parseNumber(obj.qtd);
-        obj.volumes = parseNumber(obj.volumes);
-        obj.kg = parseNumber(obj.kg);
-        obj.m3 = parseNumber(obj.m3);
-
-        if (rowIndex === 0) {
-          console.log('Primeiro registro com números parseados:', {
-            m3: obj.m3,
-            volumes: obj.volumes,
-            kg: obj.kg,
-            qtd: obj.qtd
-          });
-        }
-
-        return obj;
-      });
-
-      const categorias = [...new Set(registros.map(r => r.categoria).filter(Boolean))].sort();
-      const destinos = [...new Set(registros.map(r => r.destinoCompleto || r.destino).filter(Boolean))].sort();
-      const empresas = [...new Set(registros.map(r => r.empresa).filter(Boolean))].sort();
-      const mercadorias = [...new Set(registros.map(r => r.mercadoria).filter(Boolean))].sort();
-      const tamanhos = [...new Set(registros.map(r => r.tamanho).filter(Boolean))].sort();
-
-      return {
-        filtros: { categorias, destinos, empresas, mercadorias },
-        registros,
-        metadados: {
-          tamanhos: tamanhos
-        },
-        metasM3: {
-          'Chile': 90,
-          'Paraguai': 105,
-          'Uruguai': 100,
-          'Portugal': 28,
-          'Panama': 28,
-          'Mexico': 28
-        }
-      };
-    }
-
     function loadData(showToastOnSuccess = false) {
       toggleRefreshButton(true);
 
-      const spreadsheetId = '1VBpyW-wQTyw_BIkFmjgQOjKoYPqqnh6hMJZOjgKMqAw';
-      const range = 'BASE GERAL';
-      const apiKey = 'AIzaSyCsRYzAkwTpefC70hx9sG9CHXnhP5YLZ4M';
-      const encodedRange = encodeURIComponent(range);
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}?key=${apiKey}`;
-
-      console.log('Iniciando busca de dados da planilha...');
-
-      fetch(url)
-        .then(function(response) {
-          console.log('Resposta da API:', response);
-          if (!response.ok) throw new Error('Erro ao buscar dados da planilha: ' + response.status + ' ' + response.statusText);
-          return response.json();
-        })
-        .then(function(data) {
-          console.log('Dados recebidos:', data);
-          rawData = processSheetData(data.values);
-          console.log('Dados processados:', rawData);
-          console.log('Países extraídos:', [...new Set(rawData.registros.map(r => r.pais))]);
-          console.log('Tipos extraídos:', [...new Set(rawData.registros.map(r => r.tipo))]);
-          preencherFiltros(rawData.filtros);
+      google.script.run
+        .withSuccessHandler(function(data) {
+          rawData = data;
+          preencherFiltros(data.filtros);
           aplicarFiltros();
           toggleRefreshButton(false);
 
@@ -281,11 +77,11 @@
             showToast('Dados atualizados com sucesso');
           }
         })
-        .catch(function(error) {
-          console.error('Erro:', error);
+        .withFailureHandler(function(error) {
           toggleRefreshButton(false);
-          showError(error.message || error);
-        });
+          showError(error);
+        })
+        .getDashboardData();
     }
 
     function atualizarDados() {
@@ -326,44 +122,11 @@
       }, 7000);
     }
 
-    function showSuccessToast(message) {
-      const existingToast = document.getElementById('successMessage');
-      if (existingToast) {
-        existingToast.innerHTML = message;
-        existingToast.classList.add('show');
-      } else {
-        const newToast = document.createElement('div');
-        newToast.id = 'successMessage';
-        newToast.className = 'success-toast show';
-        newToast.innerHTML = message;
-        document.body.appendChild(newToast);
-      }
-      setTimeout(function() {
-        const successToast = document.getElementById('successMessage');
-        if (successToast) successToast.classList.remove('show');
-      }, 6000);
-    }
-
     function preencherFiltros(filtros) {
       preencherSelect('filtroCategoria', filtros.categorias || [], 'Todas');
       preencherSelect('filtroDestino', filtros.destinos || [], 'Todos');
       preencherSelect('filtroEmpresa', filtros.empresas || [], 'Todas');
       preencherDatalist('listaMercadorias', filtros.mercadorias || []);
-    }
-
-    function preencherFiltrosPorModo() {
-      if (!rawData) return;
-      
-      const registrosModo = getRegistrosBasePorModo();
-      const categorias = [...new Set(registrosModo.map(r => r.categoria).filter(Boolean))].sort();
-      const destinos = [...new Set(registrosModo.map(r => r.destinoCompleto || r.destino).filter(Boolean))].sort();
-      const empresas = [...new Set(registrosModo.map(r => r.empresa).filter(Boolean))].sort();
-      const mercadorias = [...new Set(registrosModo.map(r => r.mercadoria).filter(Boolean))].sort();
-      
-      preencherSelect('filtroCategoria', categorias, 'Todas');
-      preencherSelect('filtroDestino', destinos, modoSelecionado === 'internacional' ? 'Todos os destinos' : 'Todos');
-      preencherSelect('filtroEmpresa', empresas, 'Todas');
-      preencherDatalist('listaMercadorias', mercadorias);
     }
 
     function atualizarFiltroDestinoPorModo(registrosBaseModo) {
@@ -409,13 +172,7 @@
     function setModo(modo) {
       modoSelecionado = modo;
       paisSelecionadoBotao = '';
-      tipoSelecionado = '';
-      categoriaSelecionadaBotao = '';
       document.getElementById('filtroDestino').value = '';
-      document.getElementById('filtroCategoria').value = '';
-      document.getElementById('filtroEmpresa').value = '';
-      document.getElementById('filtroMercadoria').value = '';
-      preencherFiltrosPorModo();
       aplicarFiltros();
     }
 
@@ -451,40 +208,11 @@
       wrap.appendChild(allBtn);
 
       items.forEach(function(item) {
-        if (modoSelecionado === 'internacional' && item === 'Brasil') return;
-
         const btn = document.createElement('button');
         btn.className = 'chip-btn' + (paisSelecionadoBotao === item ? ' active' : '');
         btn.textContent = getFlagByDestino(item) + ' ' + item;
         btn.onclick = function() {
           paisSelecionadoBotao = (paisSelecionadoBotao === item ? '' : item);
-          aplicarFiltros();
-        };
-        wrap.appendChild(btn);
-      });
-    }
-
-    function renderTipoButtons(items) {
-      const wrap = document.getElementById('tipoButtonsWrap');
-      if (!wrap) return;
-      
-      wrap.innerHTML = '';
-
-      const allBtn = document.createElement('button');
-      allBtn.className = 'chip-btn' + (!tipoSelecionado ? ' active' : '');
-      allBtn.textContent = 'Todos os tipos';
-      allBtn.onclick = function() {
-        tipoSelecionado = '';
-        aplicarFiltros();
-      };
-      wrap.appendChild(allBtn);
-
-      items.forEach(function(item) {
-        const btn = document.createElement('button');
-        btn.className = 'chip-btn' + (tipoSelecionado === item ? ' active' : '');
-        btn.textContent = item.charAt(0).toUpperCase() + item.slice(1);
-        btn.onclick = function() {
-          tipoSelecionado = (tipoSelecionado === item ? '' : item);
           aplicarFiltros();
         };
         wrap.appendChild(btn);
@@ -554,30 +282,15 @@
         tituloChart.textContent = modoSelecionado === 'internacional' ? 'Representatividade por País' : 'Representatividade por Destino';
       }
 
-      const tipoPanel = document.getElementById('tipoPanel');
-      if (tipoPanel) {
-        tipoPanel.style.display = modoSelecionado === 'internacional' ? 'block' : 'none';
-      }
-
-      const registrosComQtd = registrosBaseModo.filter(function(item) {
-        return Number(item.qtd || 0) > 0;
-      });
-
-      const paisesModo = modoSelecionado === 'nacional'
-        ? [...new Set(registrosComQtd.map(function(item) {
-            return item.destinoCompleto || item.destino;
-          }).filter(Boolean))]
-        : [...new Set(registrosComQtd.map(function(item) {
-            return item.pais;
-          }).filter(Boolean))];
-
-      const categoriasModo = [...new Set(registrosBaseModo.map(function(item) {
-        return item.categoria;
+      const paisesModo = [...new Set(registrosBaseModo.map(function(item) {
+        return item.pais;
       }).filter(Boolean))].sort(function(a, b) {
         return a.localeCompare(b, 'pt-BR');
       });
 
-      paisesModo.sort(function(a, b) {
+      const categoriasModo = [...new Set(registrosBaseModo.map(function(item) {
+        return item.categoria;
+      }).filter(Boolean))].sort(function(a, b) {
         return a.localeCompare(b, 'pt-BR');
       });
 
@@ -589,37 +302,22 @@
       const empresaSelecionada = document.getElementById('filtroEmpresa').value;
       const mercadoriaBusca = (document.getElementById('filtroMercadoria').value || '').toLowerCase().trim();
 
-      if (modoSelecionado === 'internacional') {
-        const tiposModo = [...new Set(registrosBaseModo.map(function(item) {
-          return item.tipo;
-        }).filter(Boolean))].sort();
-        renderTipoButtons(tiposModo);
-      }
-
       const registrosFiltrados = registrosBaseModo.filter(function(item) {
         const categoriaItem = item.categoria || '';
-        const itemPaisOuDestino = modoSelecionado === 'nacional' ? item.destinoCompleto : item.pais;
-        const matchPaisBotao = !paisSelecionadoBotao || itemPaisOuDestino === paisSelecionadoBotao;
+        const matchPaisBotao = !paisSelecionadoBotao || item.pais === paisSelecionadoBotao;
         const matchCategoria = !categoriaSelecionada || categoriaItem === categoriaSelecionada;
         const matchDestino = !destinoSelecionado || item.destinoCompleto === destinoSelecionado;
         const matchEmpresa = !empresaSelecionada || item.empresa === empresaSelecionada;
         const matchMercadoria = !mercadoriaBusca || (item.mercadoria || '').toLowerCase().indexOf(mercadoriaBusca) > -1;
-        const matchTipo = !tipoSelecionado || item.tipo === tipoSelecionado;
 
-        return matchPaisBotao && matchCategoria && matchDestino && matchEmpresa && matchMercadoria && matchTipo;
+        return matchPaisBotao && matchCategoria && matchDestino && matchEmpresa && matchMercadoria;
       });
 
       const totais = calcularTotais(registrosFiltrados);
       const resumoDestino = agruparVisual(registrosFiltrados);
-      let ordemTamanhos = (rawData.metadados && Array.isArray(rawData.metadados.tamanhos)) ? rawData.metadados.tamanhos : [];
-      const ordemPadrao = ['P', 'M', 'G', 'GG', 'EGG', 'EXGG'];
-      const tamanhosValidos = ordemPadrao.filter(t => ordemTamanhos.includes(t));
-      const temOutros = ordemTamanhos.some(t => !ordemPadrao.includes(t));
-      ordemTamanhos = tamanhosValidos.concat(temOutros ? ['OUTROS'] : []);
-
-      const produtosPivot = gerarPivotProdutos(registrosFiltrados, ordemTamanhos);
-      const categoriasPivot = gerarPivotCategorias(registrosFiltrados, ordemTamanhos);
-      const metasResumo = calcularMetasResumo(registrosBaseModo);
+      const produtosPivot = gerarPivotProdutos(registrosFiltrados, rawData.metadados.tamanhos);
+      const categoriasPivot = gerarPivotCategorias(registrosFiltrados, rawData.metadados.tamanhos);
+      const metasResumo = calcularMetasResumo(registrosFiltrados);
 
       animateValue('totalVolumes', totais.volumes, 'int');
       animateValue('totalKg', totais.kg, 'int');
@@ -628,8 +326,8 @@
 
       drawChart(resumoDestino);
       renderResumoTable(resumoDestino);
-      renderCategoriasTable(categoriasPivot, ordemTamanhos);
-      renderProdutosTable(produtosPivot, ordemTamanhos);
+      renderCategoriasTable(categoriasPivot, rawData.metadados.tamanhos);
+      renderProdutosTable(produtosPivot, rawData.metadados.tamanhos);
       renderMetasM3(metasResumo);
       verificarAlertas(metasResumo);
     }
@@ -711,11 +409,10 @@
 
     function gerarPivotProdutos(registros, ordemTamanhos) {
       const mapa = {};
-      const ordemPadrao = ['P', 'M', 'G', 'GG', 'EGG', 'EXGG'];
 
       registros.forEach(function(item) {
         const produto = item.mercadoria || 'Sem mercadoria';
-        const tamanho = ordemPadrao.includes(item.tamanho) ? item.tamanho : 'OUTROS';
+        const tamanho = ordemTamanhos.includes(item.tamanho) ? item.tamanho : 'OUTROS';
         const qtd = Number(item.qtd || 0);
 
         if (!mapa[produto]) {
@@ -723,9 +420,6 @@
           ordemTamanhos.forEach(function(t) {
             mapa[produto][t] = 0;
           });
-          if (!mapa[produto]['OUTROS']) {
-            mapa[produto]['OUTROS'] = 0;
-          }
         }
 
         mapa[produto][tamanho] += qtd;
@@ -741,11 +435,10 @@
 
     function gerarPivotCategorias(registros, ordemTamanhos) {
       const mapa = {};
-      const ordemPadrao = ['P', 'M', 'G', 'GG', 'EGG', 'EXGG'];
 
       registros.forEach(function(item) {
         const categoria = item.categoria || 'Sem categoria';
-        const tamanho = ordemPadrao.includes(item.tamanho) ? item.tamanho : 'OUTROS';
+        const tamanho = ordemTamanhos.includes(item.tamanho) ? item.tamanho : 'OUTROS';
         const qtd = Number(item.qtd || 0);
 
         if (!mapa[categoria]) {
@@ -753,9 +446,6 @@
           ordemTamanhos.forEach(function(t) {
             mapa[categoria][t] = 0;
           });
-          if (!mapa[categoria]['OUTROS']) {
-            mapa[categoria]['OUTROS'] = 0;
-          }
         }
 
         mapa[categoria][tamanho] += qtd;
@@ -772,96 +462,75 @@
     function normalizarChaveMeta(destinoCompleto) {
       const destino = removeAccents(destinoCompleto);
 
-      // Retorna o nome do país para buscar a meta
-      if (destino.includes('chile')) return 'Chile';
-      if (destino.includes('paraguai')) return 'Paraguai';
-      if (destino.includes('uruguai')) return 'Uruguai';
-      if (destino.includes('portugal')) return 'Portugal';
-      if (destino.includes('panama')) return 'Panama';
-      if (destino.includes('mexico')) return 'Mexico';
+      if (destino === 'mexico romance') return 'Mexico Romance';
+      if (destino === 'méxico romance') return 'Mexico Romance';
+      if (destino === 'panama romance') return 'Panama Romance';
+      if (destino === 'panamá romance') return 'Panama Romance';
+      if (destino === 'portugal romance') return 'Portugal Romance';
+      if (destino === 'chile romance') return 'Chile Romance';
+      if (destino === 'chile favorita') return 'Chile Favorita';
+      if (destino === 'paraguai romance') return 'Paraguai Romance';
+      if (destino === 'paraguai favorita') return 'Paraguai Favorita';
+      if (destino === 'uruguai romance') return 'Uruguai Romance';
+      if (destino === 'uruguai favorita') return 'Uruguai Favorita';
 
       return destinoCompleto;
     }
 
     function calcularMetasResumo(registros) {
       const mapa = {};
-      
-      // Gera metas de 100 m³ para destinos nacionais
-      const destinavosNacionais = [...new Set(registros
-        .filter(r => r.modo === 'nacional')
-        .map(r => r.destinoCompleto)
-        .filter(Boolean))];
-      
-      destinavosNacionais.forEach(dest => {
-        const chaveDestino = normalizarChaveMeta(dest);
-        if (!rawData.metasM3[chaveDestino]) {
-          rawData.metasM3[chaveDestino] = 100;
-        }
-      });
 
       registros.forEach(function(item) {
         if (!isValidDestino(item.destinoCompleto)) return;
+        if (item.modo !== 'internacional') return;
 
         const chaveMeta = normalizarChaveMeta(item.destinoCompleto);
         const meta = rawData && rawData.metasM3 ? Number(rawData.metasM3[chaveMeta] || 0) : 0;
-        // Remove o filtro: if (!meta) return; para permitir Romance/Favorita aparecerem
+        if (!meta) return;
 
-        const chaveVisual = item.modo === 'internacional' ? (item.pais || chaveMeta) : item.destinoCompleto;
-        const tipo = item.tipo || 'Geral';
+        const chaveVisual = modoSelecionado === 'internacional' ? (item.pais || chaveMeta) : chaveMeta;
 
         if (!mapa[chaveVisual]) {
           mapa[chaveVisual] = {
             destino: chaveVisual,
             real: 0,
-            meta: meta,  // Agora sempre recebe a meta, mesmo que 0
+            meta: 0,
             volumes: 0,
-            pecas: 0,
-            destinosSet: new Set(),
-            tiposMapa: {}
+            detalhesMapa: {}
           };
         }
 
         mapa[chaveVisual].real += Number(item.m3 || 0);
         mapa[chaveVisual].volumes += Number(item.volumes || 0);
-        mapa[chaveVisual].pecas += Number(item.qtd || 0);
-        
-        // Atualiza meta se ainda é 0 (para casos onde meta vem depois)
-        if (mapa[chaveVisual].meta === 0 && meta > 0) {
-          mapa[chaveVisual].meta = meta;
-        }
 
-        mapa[chaveVisual].destinosSet.add(item.destinoCompleto || chaveVisual);
-
-        if (!mapa[chaveVisual].tiposMapa[tipo]) {
-          mapa[chaveVisual].tiposMapa[tipo] = {
-            tipo: tipo === 'Geral' ? chaveVisual : tipo,
+        if (!mapa[chaveVisual].detalhesMapa[chaveMeta]) {
+          mapa[chaveVisual].detalhesMapa[chaveMeta] = {
+            destino: chaveMeta,
             real: 0,
-            volumes: 0,
-            pecas: 0
+            meta: meta,
+            volumes: 0
           };
+          mapa[chaveVisual].meta += meta;
         }
 
-        mapa[chaveVisual].tiposMapa[tipo].real += Number(item.m3 || 0);
-        mapa[chaveVisual].tiposMapa[tipo].volumes += Number(item.volumes || 0);
-        mapa[chaveVisual].tiposMapa[tipo].pecas += Number(item.qtd || 0);
+        mapa[chaveVisual].detalhesMapa[chaveMeta].real += Number(item.m3 || 0);
+        mapa[chaveVisual].detalhesMapa[chaveMeta].volumes += Number(item.volumes || 0);
       });
 
       return Object.keys(mapa).map(function(k) {
         const item = mapa[k];
-        item.destinosCount = item.destinosSet.size;
         item.percentual = item.meta > 0 ? (item.real / item.meta) * 100 : 0;
         item.falta = Math.max(item.meta - item.real, 0);
-        item.detalhes = Object.keys(item.tiposMapa).map(function(d) {
-          return item.tiposMapa[d];
+        item.detalhes = Object.keys(item.detalhesMapa).map(function(d) {
+          const detalhe = item.detalhesMapa[d];
+          detalhe.percentual = detalhe.meta > 0 ? (detalhe.real / detalhe.meta) * 100 : 0;
+          detalhe.falta = Math.max(detalhe.meta - detalhe.real, 0);
+          return detalhe;
         }).sort(function(a, b) {
-          return b.real - a.real;
+          return b.percentual - a.percentual;
         });
-        delete item.destinosSet;
-        delete item.tiposMapa;
+        delete item.detalhesMapa;
         return item;
-      }).filter(function(item) {
-        // Filtra apenas países que têm meta
-        return item.meta > 0;
       }).sort(function(a, b) {
         return b.percentual - a.percentual;
       });
@@ -934,16 +603,7 @@
       chartData.addColumn({ type: 'string', role: 'tooltip', p: { html: true } });
 
       items.forEach(function(item) {
-        const colors = {
-          'Paraguai': '#3B82F6',
-          'Portugal': '#10B981',
-          'Uruguai': '#F59E0B',
-          'Chile': '#8B5CF6',
-          'Panamá': '#EC4899',
-          'México': '#06B6D4'
-        };
-        const color = colors[item.destino] || '#38BDF8';
-        const style = 'color: ' + color + '; stroke-color: ' + color + '; stroke-width: 1.5; fill-opacity: 0.92';
+        const style = 'color: #38BDF8; stroke-color: #60A5FA; stroke-width: 1; opacity: 0.98';
         chartData.addRow([
           item.destino,
           item.representatividade,
@@ -955,18 +615,18 @@
 
       var options = {
         title: '',
-        height: Math.max(360, items.length * 48),
+        height: Math.max(320, items.length * 42),
         legend: { position: 'none' },
         chartArea: {
           width: window.innerWidth <= 768 ? '64%' : '78%',
-          height: '86%',
+          height: '82%',
           left: window.innerWidth <= 768 ? 110 : 170,
-          top: 20
+          top: 18
         },
         annotations: {
           alwaysOutside: false,
           textStyle: {
-            fontSize: 12,
+            fontSize: 11,
             bold: true,
             color: '#FFFFFF'
           }
@@ -974,22 +634,22 @@
         hAxis: {
           minValue: 0,
           maxValue: 100,
-          gridlines: { color: 'rgba(255,255,255,0.04)' },
+          gridlines: { color: 'transparent' },
           minorGridlines: { color: 'transparent' },
-          baselineColor: 'rgba(255,255,255,0.08)',
-          textStyle: { color: '#94A3B8', fontSize: 12 },
+          baselineColor: 'transparent',
+          textStyle: { color: '#94A3B8', fontSize: 11 },
           format: "#'%'"
         },
         vAxis: {
           gridlines: { color: 'transparent' },
           baselineColor: 'transparent',
-          textStyle: { color: '#CBD5E1', fontSize: 13, fontWeight: 'bold' }
+          textStyle: { color: '#CBD5E1', fontSize: 12 }
         },
         backgroundColor: 'transparent',
-        bar: { groupWidth: '72%' },
+        bar: { groupWidth: '64%' },
         tooltip: {
           isHtml: true,
-          textStyle: { fontSize: 13 },
+          textStyle: { fontSize: 12 },
           showColorCode: true
         },
         enableInteractivity: true
@@ -1003,13 +663,22 @@
         for (let i = 0; i < rects.length; i++) {
           const rect = rects[i];
           const fill = rect.getAttribute('fill');
-          if (fill && fill !== 'transparent' && !fill.match(/^rgb\(220/)) {
-            rect.setAttribute('rx', '10');
-            rect.setAttribute('ry', '10');
-            rect.style.filter = 'drop-shadow(0 8px 16px rgba(0,0,0,0.30)) drop-shadow(0 0 12px ' + fill.replace(/opacity/, 'opacity') + ')';
+          if (fill && (fill.toLowerCase() === '#38bdf8' || fill.toLowerCase() === '#60a5fa')) {
+            rect.setAttribute('rx', '8');
+            rect.setAttribute('ry', '8');
+            rect.style.filter = 'drop-shadow(0 0 8px rgba(56,189,248,0.60)) drop-shadow(0 0 16px rgba(56,189,248,0.30))';
           }
         }
-      }, 150);
+
+        const texts = chartDiv.getElementsByTagName('text');
+        for (let i = 0; i < texts.length; i++) {
+          const t = texts[i];
+          const fill = t.getAttribute('fill');
+          if (fill && (fill.toLowerCase() === '#ffffff' || fill.toLowerCase() === '#fff')) {
+            t.style.filter = 'drop-shadow(0 0 6px rgba(56,189,248,0.18))';
+          }
+        }
+      }, 120);
     }
 
     function renderResumoTable(items) {
@@ -1022,33 +691,24 @@
       }
 
       items.forEach(function(item) {
-        // Linha principal do país/destino
-        var trPrincipal = document.createElement('tr');
-        trPrincipal.className = 'resumo-principal';
-        trPrincipal.innerHTML =
-          '<td class="font-semibold">' + escapeHtml(item.destino) + '</td>' +
+        var tr = document.createElement('tr');
+        const detalhes = (item.detalhes || []).map(function(d) {
+          return d.destino + ': ' + formatNumber(d.volumes) + ' vol | ' + formatDecimal(d.m3) + ' m³';
+        }).join('\n');
+        const detalhesHtml = modoSelecionado === 'internacional' && item.detalhes && item.detalhes.length > 1
+          ? '<div class="detail-stack">' + item.detalhes.map(function(d) {
+              return '<span class="detail-pill">' + escapeHtml(d.destino) + ': <b>' + formatDecimal(d.m3) + ' m³</b></span>';
+            }).join('') + '</div>'
+          : '';
+        tr.title = detalhes;
+        tr.innerHTML =
+          '<td class="font-semibold">' + escapeHtml(item.destino) + detalhesHtml + '</td>' +
           '<td class="text-right font-semibold">' + formatPercent(item.representatividade) + '</td>' +
           '<td class="text-right">' + formatNumber(item.volumes) + '</td>' +
           '<td class="text-right">' + formatNumber(item.kg) + '</td>' +
           '<td class="text-right">' + formatDecimal(item.m3) + '</td>' +
           '<td class="text-right">' + formatNumber(item.pecas) + '</td>';
-        tbody.appendChild(trPrincipal);
-
-        // Linhas de detalhe (Romance/Favorita) se existirem
-        if (modoSelecionado === 'internacional' && item.detalhes && item.detalhes.length > 0) {
-          item.detalhes.forEach(function(d) {
-            var trDetalhe = document.createElement('tr');
-            trDetalhe.className = 'resumo-detalhe';
-            trDetalhe.innerHTML =
-              '<td style="padding-left:40px; color:#94A3B8;"><span style="color:#64748B;">▶</span> ' + escapeHtml(d.destino) + '</td>' +
-              '<td class="text-right" style="color:#94A3B8;">—</td>' +
-              '<td class="text-right" style="color:#94A3B8;">' + formatNumber(d.volumes) + '</td>' +
-              '<td class="text-right" style="color:#94A3B8;">' + formatNumber(d.kg) + '</td>' +
-              '<td class="text-right">' + formatDecimal(d.m3) + '</td>' +
-              '<td class="text-right" style="color:#94A3B8;">' + formatNumber(d.pecas) + '</td>';
-            tbody.appendChild(trDetalhe);
-          });
-        }
+        tbody.appendChild(tr);
       });
     }
 
@@ -1117,29 +777,23 @@
     }
 
     function getStatusMeta(percent) {
-      if (percent > 100) {
-        return { className: 'concluida', label: 'Concluída', color: '#3B82F6' };
+      if (percent <= 30) {
+        return { className: 'low', label: 'Baixo nível', color: '#EF4444' };
       }
-      if (percent >= 91) {
-        return { className: 'reta-final', label: 'Reta final', color: '#22C55E' };
+      if (percent <= 60) {
+        return { className: 'medium', label: 'Em atenção', color: '#FACC15' };
       }
-      if (percent >= 51) {
-        return { className: 'quase-la', label: 'Quase lá', color: '#F97316' };
-      }
-      if (percent >= 31) {
-        return { className: 'em-andamento', label: 'Em andamento', color: '#FACC15' };
-      }
-      return { className: 'iniciada', label: 'Iniciada', color: '#EF4444' };
+      return { className: 'high', label: 'Bom avanço', color: '#22C55E' };
     }
 
     function buildMetaDetalhesTooltip(item) {
-      if (!item.detalhes || item.detalhes.length === 0) return '';
+      if (!item.detalhes || item.detalhes.length <= 1) return '';
 
-      return '<div class="tooltip-section-title">Detalhe por tipo</div>' +
+      return '<div class="tooltip-section-title">Detalhe por destino</div>' +
         item.detalhes.map(function(d) {
           return '<div class="tooltip-row">' +
-            '<span class="tooltip-label">' + escapeHtml(d.tipo) + '</span>' +
-            '<span class="tooltip-value">' + formatDecimal(d.real) + ' m³ · ' + formatNumber(d.volumes) + ' vol</span>' +
+            '<span class="tooltip-label">' + escapeHtml(d.destino) + '</span>' +
+            '<span class="tooltip-value">' + formatDecimal(d.real) + ' / ' + formatDecimal(d.meta) + ' m³ · ' + formatDecimal(d.percentual) + '%</span>' +
           '</div>';
         }).join('');
     }
@@ -1157,10 +811,7 @@
         const percent = item.percentual;
         const percentBar = Math.max(0, Math.min(percent, 100));
         const flag = getFlagByDestino(item.destino);
-        const code = getCountryCodeByDestino(item.destino);
         const status = getStatusMeta(percent);
-        const avgM3PorVolume = item.volumes > 0 ? (item.real / item.volumes) : 0;
-        const faltaVolumes = avgM3PorVolume > 0 ? Math.ceil(item.falta / avgM3PorVolume) : 0;
 
         const marker25 = 25;
         const marker50 = 50;
@@ -1171,12 +822,8 @@
         div.className = 'meta-item';
 
         div.innerHTML =
-          '<div class="meta-top meta-top-header">' +
-            '<div class="meta-head-left">' +
-              '<div class="meta-card-code">' + escapeHtml(code) + '</div>' +
-              '<div class="meta-label">' + escapeHtml(item.destino) + '</div>' +
-              '<div class="meta-subtitle">' + item.destinosCount + ' destino' + (item.destinosCount === 1 ? '' : 's') + ' · ' + formatNumber(item.volumes) + ' vol.</div>' +
-            '</div>' +
+          '<div class="meta-top">' +
+            '<div class="meta-label"><span class="meta-flag">' + flag + '</span><span>' + escapeHtml(item.destino) + '</span></div>' +
             '<div class="meta-percent-inline" style="color:' + status.color + ';">' + formatDecimal(item.percentual) + '%</div>' +
           '</div>' +
 
@@ -1199,6 +846,21 @@
               '<div class="thermo-track">' +
                 '<div class="thermo-fill ' + status.className + '" style="width:' + percentBar + '%;"></div>' +
                 '<div class="transport-icon ' + status.className + '" style="left:calc(' + transportLeft + '%);">' +
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
                   '<img src="./assets/images/truck-icon.png" class="truck-image" alt="Caminhão em progresso">' +
                 '</div>' +
               '</div>' +
@@ -1209,8 +871,6 @@
                   '<div class="tooltip-row"><span class="tooltip-label">Volumes</span><span class="tooltip-value">' + formatNumber(item.volumes) + '</span></div>' +
                   '<div class="tooltip-row"><span class="tooltip-label">M³ carregados</span><span class="tooltip-value">' + formatDecimal(item.real) + '</span></div>' +
                   '<div class="tooltip-row"><span class="tooltip-label">Faltam para concluir</span><span class="tooltip-value">' + formatDecimal(item.falta) + ' m³</span></div>' +
-                  (avgM3PorVolume > 0 ? '<div class="tooltip-row"><span class="tooltip-label">Média / volume</span><span class="tooltip-value">' + formatDecimal(avgM3PorVolume) + ' m³</span></div>' : '') +
-                  (faltaVolumes > 0 ? '<div class="tooltip-row"><span class="tooltip-label">Volumes faltando</span><span class="tooltip-value">' + formatNumber(faltaVolumes) + '</span></div>' : '') +
                   buildMetaDetalhesTooltip(item) +
                 '</div>' +
               '</div>' +
@@ -1228,38 +888,25 @@
     }
 
     function verificarAlertas(items) {
-      const quaseAlertas = items.filter(function(item) {
-        return item.percentual >= 91 && item.percentual < 100;
-      });
-      const concluidas = items.filter(function(item) {
-        return item.percentual >= 100;
+      const alertas = items.filter(function(item) {
+        return item.percentual >= 90 && item.percentual < 100;
       });
 
-      if (quaseAlertas.length) {
-        const nomes = quaseAlertas.map(function(item) {
-          return escapeHtml(item.destino);
-        });
-        let mensagem = '';
-        if (nomes.length === 1) {
-          mensagem = '⚠️ Atenção: a carga de <b>' + nomes[0] + '</b> está prestes a ser finalizada. Fique atento.';
-        } else {
-          mensagem = '⚠️ Atenção: as cargas de <b>' + nomes.join(', ') + '</b> estão prestes a ser finalizadas. Fique atento.';
-        }
-        showAlertToast(mensagem);
+      if (!alertas.length) return;
+
+      const nomes = alertas.map(function(item) {
+        return escapeHtml(item.destino);
+      });
+
+      let mensagem = '';
+
+      if (nomes.length === 1) {
+        mensagem = '⚠️ Atenção: a carga de <b>' + nomes[0] + '</b> está prestes a fechar. Fique atento.';
+      } else {
+        mensagem = '⚠️ Atenção: as cargas de <b>' + nomes.join(', ') + '</b> estão prestes a fechar. Fique atento.';
       }
 
-      if (concluidas.length) {
-        const nomes = concluidas.map(function(item) {
-          return escapeHtml(item.destino);
-        });
-        let mensagem = '';
-        if (nomes.length === 1) {
-          mensagem = '✅ Carga concluída: <b>' + nomes[0] + '</b>. Bora enviar!!!';
-        } else {
-          mensagem = '✅ Cargas concluídas: <b>' + nomes.join(', ') + '</b>. Bora enviar!!!';
-        }
-        showSuccessToast(mensagem);
-      }
+      showAlertToast(mensagem);
     }
 
     function showError(error) {
